@@ -1,0 +1,16 @@
+Code for paper 'The evolutionary history of peptidases involved in Organelle Targeting Peptide degradation' Clotilde Garrido, Francis-André Wollman and Ingrid Lafontaine.
+
+Find new homologs to MPP, SPP, PreP or OOP peptidase in proteome.
+
+@autor : Clotilde Garrido and Ingrid Lafontaine, IBPC UMR 7141
+
+
+#DEPENDENCIES Python 3.5.2, HMMER 3.2.1
+
+#INSTALLATION
+Downlod repertory FindPeptidase, complete in the script file FindPeptidase.py pwd of repertory (Findpeptidase) and hmm bin file.
+Exucute with commande : python FindPeptidase.py <proteomefile>
+
+#FILE OVERVIEW
+- FindPeptidase.py : script to find homologues peptidase in a proteome
+- HMMMotif directory : all hmm motif using to find peptidase séparate by peptidases (MPP, PreP, OOP, SPP) and Pfam motif 
