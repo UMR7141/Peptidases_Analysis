@@ -23,6 +23,12 @@ proteomefile=sys.argv[1]
 ## 1st step : process hmmsearch with all hmm peptidase profil
 #########
 
+try:
+	os.stat(PP+'temp')
+except:
+	os.mkdir(PP+'temp')
+
+
 os.chdir(HMM)
 
 def RunHMMpep(PEP):
@@ -38,7 +44,6 @@ RunHMMpep('SPP')
 ## 2st step : hmm result to 1 csv 
 #########
 
-
 def OutHMMstoOneCSV(hmmfilelist,outcsv,filtrCov='on',threshold='------ inclusion threshold ------'):
 
         DF=pd.DataFrame(columns=['Index','Evalue','score','bias','EvalueD','scoreD','biasD','exp','N','Find in'])
@@ -46,13 +51,12 @@ def OutHMMstoOneCSV(hmmfilelist,outcsv,filtrCov='on',threshold='------ inclusion
                                         '\s+(?P<EvalueD>[.\S]+)\s+(?P<scoreD>[.\S]+)\s+(?P<biasD>[.\S]+)'+
                                         '\s+(?P<exp>[.\S]+)\s+(?P<N>\d)\s+(?P<Sequence>[.\S]+)'+
                                         '\s+(?P<Description>.+)')
+        SUPR=[]
 
         for hmmfile in hmmfilelist:
                 f_CP=open(PP+'temp/'+hmmfile,'r')
                 l=f_CP.readline()
-                print(hmmfile)
                 while threshold not in l and 'Internal pipeline statistics summary:' not in l:
-                        # print(l)
                         m=re.search(p,l)
                         if m is not None:
                                 i=len(DF)
@@ -69,13 +73,13 @@ def OutHMMstoOneCSV(hmmfilelist,outcsv,filtrCov='on',threshold='------ inclusion
                                 DF.at[i,'N']=m.group('N')
                                 DF.at[i,'Find in']=hmmfile.split('/')[-1]
                         l=f_CP.readline()
-                #print(l)
                 f_CP.close()
-                DF=Add_Couv(DF,hmmfile,filtrCov)
+                DF,SUPR=Add_Couv(DF,hmmfile,filtrCov,SUPR)
+        DF=DF.drop(SUPR)
         DF.to_csv(outcsv,sep='\t',index=False)
 
 
-def Add_Couv(DF,hmmfile,filtrCov):
+def Add_Couv(DF,hmmfile,filtrCov,SUPR):
         p = re.compile('^\s+(?P<N>[.\S]+)\s+(?P<sign>[.\S]+)\s+(?P<score>[.\S]+)\s+(?P<bias>[.\S]+)\s+(?P<cEval>[.\S]+)\s+(?P<iEval>[.\S]+)\s+(?P<hmmfrom>[.\S]+)\s+(?P<hmmto>[.\S]+)\s+(?P<ali>[.\S]+)\s+(?P<alifrom>[.\S]+)\s+(?P<alito>[.\S]+)')
         f_CP=open(PP+'temp/'+hmmfile,'r')
         l=f_CP.readline()
@@ -83,7 +87,6 @@ def Add_Couv(DF,hmmfile,filtrCov):
                 if l[0:6]=='Query:':
                         LenHMM=l.split('[')[-1][2:-2]
                 if l[0:2]=='>>':
-                        print(l,l.split(' ')[1])
                         for ind in DF[DF['Index']==l.split(' ')[1]].index :
                                 if hmmfile.split('/')[-1] in DF.at[ind,'Find in']:
                                         l=f_CP.readline()
@@ -114,18 +117,19 @@ def Add_Couv(DF,hmmfile,filtrCov):
 
                                         # 70% covery
                                         if filtrCov=='on' and len([x for x in Cov if x >0.7])==0:
-                                        	DF.drop([ind] , inplace=True)
-
+                                        	# DF.drop([ind] , inplace=True)
+                                        	SUPR.append(ind)
 
 
 
 
                 l=f_CP.readline()
-        return(DF)
+        return(DF,SUPR)
 
 OutHMMstoOneCSV(os.listdir(PP+'temp'),PP+'out.csv','on')
 
 os.system('rm -f * '+PP+'temp/*')
+
 
 ##########
 ## 3rd step : Fasta candidate sequence
@@ -139,20 +143,15 @@ def HMMcsv_to_fasta(Nom_fichier_fasta,Nom_fichier_HMM):
 	l=fREF.readline()
 	while NOK<len(LIndex) and l!='':
 
-		if l[0]=='>' and l.split(' ')[0][1:] in LIndex:
-		# if l[0]=='>' and l[1:-1].strip(' ') in LIndex:
+		if l[0]=='>' and (l.split(' ')[0][1:] in LIndex or l[1:-1].strip(' ') in LIndex):
 			NOK+=1
-			print(NOK,'/',len(LIndex))
 			f.write(l)
 			l=fREF.readline()
 			while(len(l)>0 and l[0]!='>') :
 				f.write(l)
 				l=fREF.readline()
-				print(l,len(l),'tt')
 		else:
 			l=fREF.readline()
-
-	print(len(LIndex),NOK)
 	fREF.close()
 	f.close()
 
@@ -179,8 +178,6 @@ if  os.stat(PP+'out.fasta').st_size != 0:
 	DF1=pd.read_csv(PP+'out.csv',sep='\t')
 	DF2=pd.read_csv(PP+'outbis.csv',sep='\t')
 	DF=pd.concat([DF1,DF2],ignore_index=True)
-	print(proteomefile)
-	print(proteomefile.split('/')[-1])
 	DF.to_csv(PP+'Final_'+proteomefile.split('/')[-1]+'_out.csv',sep='\t',index=False)
 else:
 	DF=pd.read_csv(PP+'out.csv',sep='\t')
@@ -207,8 +204,6 @@ def ResumeResultMotifFiltre(DF,out_file):
 		for i in df.index:
 			FI=df.at[i,'Find in'].split('_')
 			if FI[0] == 'Motif':
-				print(df.columns)
-				print(df)
 				for j in range(1,int(df.at[i,'Dom_hits'])+1):
 					if df.at[i,'Signif_hit'+str(j)]=='!':
 						motifs.append(FI[1])
@@ -216,16 +211,12 @@ def ResumeResultMotifFiltre(DF,out_file):
 				pep.append(FI[1])
 
 		if 'PreP' in pep and 'M16' in motifs and 'M16C' in motifs and 'M16Cassoc' in motifs:
-				print('FindPreP')
 				LPEP[0].append(df.at[i,'Index'])
 		elif 'OOP' in pep and 'M3' in motifs :
-				print('FindOOP')
 				LPEP[1].append(df.at[i,'Index'])
 		elif 'SPP' in pep and 'M16' in motifs and len([x for x in motifs if x=='M16C']) > 1 :
-				print('FindSPP')
 				LPEP[2].append(df.at[i,'Index'])
 		elif ('MPPA' in pep or 'MPPB' in pep )and 'M16' in motifs and 'M16C' in motifs :
-				print('FindMPP')
 				LPEP[3].append(df.at[i,'Index'])
 
 	for pep in PEP:
@@ -238,3 +229,4 @@ ResumeResultMotifFiltre(DF,'ResumeFinding.csv')
 
 
 os.system('rm -f * '+PP+'out*')
+
